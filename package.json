@@ -2,14 +2,19 @@
   "name": "taiko-private-hub",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "react-router dev",
-    "build": "react-router typegen && tsc --noEmit && react-router build && node ./scripts/build-manifest.mjs",
+    "build": "react-router typegen && tsc --noEmit && react-router build",
+    "build:cloudflare": "react-router typegen && tsc --noEmit && react-router build && node ./scripts/build-manifest.mjs",
     "deploy": "wrangler deploy",
     "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {
     "@react-router/cloudflare": "^7.16.0",
+    "@react-router/node": "^7.16.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -27,6 +32,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@vercel/react-router": "1.3.6",
     "esbuild": "^0.28.1",
     "tailwindcss": "^4.1.13",
     "typescript": "^7.0.2",
