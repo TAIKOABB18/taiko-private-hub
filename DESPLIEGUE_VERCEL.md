@@ -1,21 +1,37 @@
-# Despliegue en Vercel
+# Despliegue en Vercel — TAIKO PRIVATE HUB
 
-Este proyecto está preparado actualmente como Worker de Cloudflare con Durable Objects (`wrangler.jsonc`). Esta pasada **no despliega** ni configura producción.
+Vercel aloja **solo el frontend React Router / PWA** de TAIKO PRIVATE HUB.
+El backend Fastify permanece separado y se despliega en Render.
 
-## Estado
+## Configuración del frontend
 
-- La app usa React Router en modo framework y persistencia SQLite en Durable Object.
-- Las rutas `/api/*` están implementadas en `workers/app.ts`.
-- No se usa `x-auth-user`; la autorización real por identidad debe integrarse antes de un despliegue público.
-- Los agent jobs solo se encolan con estado `blocked`; no ejecutan código ni producción.
+- Framework: React Router v7.
+- SSR: activado.
+- Adaptador: `@vercel/react-router` mediante `vercelPreset()`.
+- Build: `npm run build` (Vercel también puede usar Bun al detectar `bun.lock`).
+- Node.js: 24.x.
 
-## Migración futura a Vercel
+## Conexión con Render
 
-1. Adaptar `workers/app.ts` y el Durable Object a funciones/serverless y una base de datos compatible con Vercel.
-2. Configurar autenticación y autorización server-side; no confiar en cabeceras inventadas.
-3. Sustituir la persistencia de archivos por un proveedor de object storage con URLs autorizadas.
-4. Configurar variables de entorno y secretos en Vercel.
-5. Revisar límites de subida, expiración de shares, revocación y auditoría.
-6. Ejecutar el build y validaciones del proyecto antes de publicar.
+El navegador no llama directamente a Render. Las llamadas a `/v1/*` llegan primero al frontend de Vercel y la ruta `app/routes/api-proxy.ts` las reenvía al backend.
 
-No se afirma compatibilidad Vercel completa hasta realizar esa adaptación.
+Variable obligatoria en Vercel:
+
+```text
+TAIKO_BACKEND_URL=https://<servicio-render>
+```
+
+Mientras `TAIKO_BACKEND_URL` no esté configurada, `/v1/*` devuelve `503 backend_not_configured` de forma deliberada.
+
+Este proxy mantiene la autenticación por cookie en el mismo origen del frontend, evita depender de CORS entre navegador y Render y rechaza peticiones con `Origin` distinto al propio frontend.
+
+## Orden de despliegue
+
+1. Importar únicamente `TAIKOABB18/taiko-private-hub` como proyecto nuevo en Vercel.
+2. Verificar que el frontend compila y carga.
+3. Desplegar `api/` en Render.
+4. Configurar PostgreSQL y el almacenamiento R2/S3 privado en Render.
+5. Añadir `TAIKO_BACKEND_URL` en Vercel apuntando al servicio Render.
+6. Redeploy de Vercel y prueba extremo a extremo: login → proyectos → chat → subida → descarga.
+
+No se deben conectar ni modificar otros proyectos de Vercel, Render o GitHub durante este flujo.
