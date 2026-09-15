@@ -4,7 +4,10 @@ const jsonError = (error: string, status: number) =>
   Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
 
 function backendBaseUrl() {
-  const value = process.env.TAIKO_BACKEND_URL?.trim();
+  const runtime = globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string | undefined> };
+  };
+  const value = runtime.process?.env?.TAIKO_BACKEND_URL?.trim();
   return value ? value.replace(/\/+$/, "") : "";
 }
 
