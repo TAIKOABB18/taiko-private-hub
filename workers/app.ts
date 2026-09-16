@@ -3,26 +3,11 @@ import type { CamelAiBinding } from "./camelai-binding";
 import { randomToken, type ItemStore } from "./item-store";
 
 export { ItemStore } from "./item-store";
-interface Env { ASSETS?: { fetch(request: Request): Promise<Response> | Response }; CAMELAI: CamelAiBinding; ITEMS: DurableObjectNamespace<ItemStore>; OWNER_PASSWORD?: string; }
+interface Env { ASSETS?: { fetch(request: Request): Promise<Response> | Response }; CAMELAI: CamelAiBinding; ITEMS: DurableObjectNamespace<ItemStore>; }
 declare module "react-router" { export interface AppLoadContext { cloudflare: { env: Env; ctx: ExecutionContext }; } }
 const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
-const OWNER_USERNAME = "TAIKO";
 function shouldServeAsset(request: Request): boolean { const method=request.method.toUpperCase(); if(method!=="GET"&&method!=="HEAD") return false; const pathname=new URL(request.url).pathname; return pathname.startsWith("/assets/")||pathname.includes(".")||pathname==="/robots.txt"; }
 function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json;charset=utf-8"}});}
-function unauthorized():Response{return new Response("TAIKO PRIVATE HUB — acceso OWNER requerido",{status:401,headers:{"WWW-Authenticate":'Basic realm="TAIKO PRIVATE HUB OWNER", charset="UTF-8"',"Cache-Control":"no-store"}});}
-function ownerAuthorized(request:Request,env:Env):boolean{
-  if(!env.OWNER_PASSWORD) return false;
-  const header=request.headers.get("Authorization");
-  if(!header?.startsWith("Basic ")) return false;
-  try{
-    const decoded=atob(header.slice(6));
-    const separator=decoded.indexOf(":");
-    if(separator<0) return false;
-    const username=decoded.slice(0,separator).trim().toUpperCase();
-    const password=decoded.slice(separator+1);
-    return username===OWNER_USERNAME && password===env.OWNER_PASSWORD;
-  }catch{return false;}
-}
 async function api(request:Request,env:Env):Promise<Response>{
   const url=new URL(request.url), parts=url.pathname.replace(/^\/api\/?/,"").split("/").filter(Boolean), hub=env.ITEMS.get(env.ITEMS.idFromName("hub"));
   if(parts[0]!=="files"&&parts[0]!=="shares"&&parts[0]!=="agent-jobs"&&parts[0]!=="policy") return json({error:"unknown endpoint"},404);
@@ -43,7 +28,6 @@ async function api(request:Request,env:Env):Promise<Response>{
   return json({error:"method not allowed"},405);
 }
 export default { async fetch(request:Request,env:Env,ctx:ExecutionContext){
-  if(!ownerAuthorized(request,env)) return unauthorized();
   if(new URL(request.url).pathname.startsWith("/api/")) return api(request,env);
   if(env.ASSETS&&shouldServeAsset(request)){const response=await env.ASSETS.fetch(request);if(response.status!==404)return response;}
   return requestHandler(request,{cloudflare:{env,ctx}});
