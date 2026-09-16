@@ -6,7 +6,7 @@ export { ItemStore } from "./item-store";
 interface Env { ASSETS?: { fetch(request: Request): Promise<Response> | Response }; CAMELAI: CamelAiBinding; ITEMS: DurableObjectNamespace<ItemStore>; OWNER_PASSWORD?: string; }
 declare module "react-router" { export interface AppLoadContext { cloudflare: { env: Env; ctx: ExecutionContext }; } }
 const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
-const OWNER_EMAIL = "tramiteshbc@gmail.com";
+const OWNER_USERNAME = "TAIKO";
 function shouldServeAsset(request: Request): boolean { const method=request.method.toUpperCase(); if(method!=="GET"&&method!=="HEAD") return false; const pathname=new URL(request.url).pathname; return pathname.startsWith("/assets/")||pathname.includes(".")||pathname==="/robots.txt"; }
 function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json;charset=utf-8"}});}
 function unauthorized():Response{return new Response("TAIKO PRIVATE HUB — acceso OWNER requerido",{status:401,headers:{"WWW-Authenticate":'Basic realm="TAIKO PRIVATE HUB OWNER", charset="UTF-8"',"Cache-Control":"no-store"}});}
@@ -18,9 +18,9 @@ function ownerAuthorized(request:Request,env:Env):boolean{
     const decoded=atob(header.slice(6));
     const separator=decoded.indexOf(":");
     if(separator<0) return false;
-    const email=decoded.slice(0,separator).trim().toLowerCase();
+    const username=decoded.slice(0,separator).trim().toUpperCase();
     const password=decoded.slice(separator+1);
-    return email===OWNER_EMAIL && password===env.OWNER_PASSWORD;
+    return username===OWNER_USERNAME && password===env.OWNER_PASSWORD;
   }catch{return false;}
 }
 async function api(request:Request,env:Env):Promise<Response>{
