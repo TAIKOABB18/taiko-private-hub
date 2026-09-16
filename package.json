@@ -9,7 +9,7 @@
     "dev": "react-router dev",
     "build": "react-router typegen && tsc --noEmit && react-router build",
     "build:cloudflare": "react-router typegen && tsc --noEmit && react-router build && node ./scripts/build-manifest.mjs",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --config build/server/wrangler.json",
     "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {
