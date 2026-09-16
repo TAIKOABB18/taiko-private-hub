@@ -5,5 +5,6 @@ export default [
   route("auth", "routes/auth.tsx"),
   route("user", "routes/user.tsx"),
   route("invite/:token", "routes/invite.tsx"),
+  route("jokes", "routes/jokes.tsx"),
   route("v1/*", "routes/api-proxy.ts"),
 ] satisfies RouteConfig;
