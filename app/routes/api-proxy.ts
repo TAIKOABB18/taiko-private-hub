@@ -1,71 +1,29 @@
 import type { Route } from "./+types/api-proxy";
 
-const jsonError = (error: string, status: number) =>
-  Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
+const jsonError = (error: string, status: number) => Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
 
-function backendBaseUrl() {
-  const runtime = globalThis as typeof globalThis & {
-    process?: { env?: Record<string, string | undefined> };
-  };
-  const value = runtime.process?.env?.TAIKO_BACKEND_URL?.trim();
-  return value ? value.replace(/\/+$/, "") : "";
+type Runtime = { process?: { env?: Record<string, string | undefined> }; TAIKO_BACKEND_URL?: string };
+function backendBaseUrl(context: Route.LoaderArgs["context"]) {
+  const runtime = globalThis as typeof globalThis & Runtime;
+  const configured = runtime.process?.env?.TAIKO_BACKEND_URL ?? runtime.TAIKO_BACKEND_URL;
+  const cloudflareEnv = (context as { cloudflare?: { env?: Record<string, unknown> } }).cloudflare?.env;
+  const value = configured ?? cloudflareEnv?.TAIKO_BACKEND_URL;
+  return typeof value === "string" && value.trim() ? value.trim().replace(/\/+$/, "") : "";
 }
 
-function isSameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  return origin === new URL(request.url).origin;
-}
-
-async function proxy(request: Request): Promise<Response> {
+function isSameOrigin(request: Request) { const origin = request.headers.get("origin"); return !origin || origin === new URL(request.url).origin; }
+async function proxy(request: Request, context: Route.LoaderArgs["context"]): Promise<Response> {
   if (!isSameOrigin(request)) return jsonError("origin_not_allowed", 403);
-
-  const baseUrl = backendBaseUrl();
+  const baseUrl = backendBaseUrl(context);
   if (!baseUrl) return jsonError("backend_not_configured", 503);
-
   const incomingUrl = new URL(request.url);
   const target = new URL(`${incomingUrl.pathname}${incomingUrl.search}`, `${baseUrl}/`);
-  const headers = new Headers(request.headers);
-
-  headers.delete("host");
-  headers.delete("content-length");
-  headers.delete("origin");
-  headers.set("x-forwarded-host", incomingUrl.host);
-  headers.set("x-forwarded-proto", incomingUrl.protocol.replace(":", ""));
-
-  const init: RequestInit = {
-    method: request.method,
-    headers,
-    redirect: "manual",
-  };
-
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = await request.arrayBuffer();
-  }
-
-  try {
-    const upstream = await fetch(target, init);
-    const responseHeaders = new Headers(upstream.headers);
-
-    responseHeaders.delete("content-encoding");
-    responseHeaders.delete("content-length");
-    responseHeaders.set("cache-control", "no-store");
-
-    return new Response(upstream.body, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers: responseHeaders,
-    });
-  } catch (error) {
-    console.error("TAIKO backend proxy failed", error);
-    return jsonError("backend_unavailable", 502);
-  }
+  const headers = new Headers(request.headers); headers.delete("host"); headers.delete("content-length"); headers.delete("origin");
+  headers.set("x-forwarded-host", incomingUrl.host); headers.set("x-forwarded-proto", incomingUrl.protocol.replace(":", ""));
+  const init: RequestInit = { method: request.method, headers, redirect: "manual" };
+  if (request.method !== "GET" && request.method !== "HEAD") init.body = await request.arrayBuffer();
+  try { const upstream = await fetch(target, init); const responseHeaders = new Headers(upstream.headers); responseHeaders.delete("content-encoding"); responseHeaders.delete("content-length"); responseHeaders.set("cache-control", "no-store"); return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: responseHeaders }); }
+  catch (error) { console.error("TAIKO backend proxy failed", error); return jsonError("backend_unavailable", 502); }
 }
-
-export async function loader({ request }: Route.LoaderArgs) {
-  return proxy(request);
-}
-
-export async function action({ request }: Route.ActionArgs) {
-  return proxy(request);
-}
+export async function loader({ request, context }: Route.LoaderArgs) { return proxy(request, context); }
+export async function action({ request, context }: Route.ActionArgs) { return proxy(request, context); }
