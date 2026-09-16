@@ -1,10 +1,28 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 mkdirSync("build/server", { recursive: true });
 
 const rawConfig = readFileSync("wrangler.jsonc", "utf8");
 const config = JSON.parse(rawConfig.replace(/\/\/[^\n]*/g, "").replace(/,(\s*[}\]])/g, "$1"));
+
+function findServerBuild(dir) {
+  if (!existsSync(dir)) return null;
+  const direct = join(dir, "index.js");
+  if (existsSync(direct)) return direct;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const found = findServerBuild(join(dir, entry.name));
+    if (found) return found;
+  }
+  return null;
+}
+
+const serverBuildPath = findServerBuild("build/server");
+if (!serverBuildPath) throw new Error("React Router server build index.js not found under build/server");
+const serverBuildImport = "./" + serverBuildPath.replaceAll("\\", "/");
+console.log(`Using React Router server build: ${serverBuildImport}`);
 
 const sharedEsbuildArgs = [
   "--bundle",
@@ -23,20 +41,18 @@ const sharedEsbuildArgs = [
 ];
 
 if (config.main) {
-  // Bundle the configured worker entry (e.g. ./workers/app.ts) so exports such as
-  // Durable Object classes survive the build. The React Router server build is
-  // aliased in for the virtual module the entry imports.
   execFileSync("node_modules/.bin/esbuild", [
     config.main,
-    '--alias:virtual:react-router/server-build=./build/server/index.js',
+    `--alias:virtual:react-router/server-build=${serverBuildImport}`,
     '--define:import.meta.env.MODE="production"',
     ...sharedEsbuildArgs,
   ], { stdio: "inherit" });
 } else {
   const workerEntryPath = "build/server/_cf_worker_entry.js";
+  const relativeBuild = "./" + serverBuildPath.replace(/^build\/server\//, "").replaceAll("\\", "/");
   const workerEntry = [
     'import { createRequestHandler } from "react-router";',
-    'import * as build from "./index.js";',
+    `import * as build from ${JSON.stringify(relativeBuild)};`,
     '',
     'const handler = createRequestHandler(build, "production");',
     '',
@@ -62,14 +78,6 @@ if (config.main) {
   rmSync(workerEntryPath, { force: true });
 }
 
-// The platform deploy pipeline only reads metadata.bindings (a top-level vars
-// key is a no-op on that path), so convert wrangler vars into env-var bindings:
-// strings become plain_text bindings and everything else becomes a json binding.
-// The manifest is a wrangler-valid config describing the FINAL build
-// output: main names the entry module and rules declare which other files
-// upload as modules (no_bundle semantics). The deploy pipeline
-// (project-worker-bundle) selects modules strictly by these rules and
-// lifts vars/durable_objects/kv_namespaces/r2_buckets/ai/services into API bindings.
 const manifest = {
   main: "worker.js",
   no_bundle: true,
