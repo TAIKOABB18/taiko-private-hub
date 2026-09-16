@@ -1,34 +1,42 @@
 import { createRequestHandler } from "react-router";
+import bcrypt from "bcryptjs";
 import type { CamelAiBinding } from "./camelai-binding";
-import { randomToken, type ItemStore } from "./item-store";
+import { randomToken, type ItemStore, type User } from "./item-store";
 
 export { ItemStore } from "./item-store";
 interface Env { ASSETS?: { fetch(request: Request): Promise<Response> | Response }; CAMELAI: CamelAiBinding; ITEMS: DurableObjectNamespace<ItemStore>; }
 declare module "react-router" { export interface AppLoadContext { cloudflare: { env: Env; ctx: ExecutionContext }; } }
-const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
-function shouldServeAsset(request: Request): boolean { const method=request.method.toUpperCase(); if(method!=="GET"&&method!=="HEAD") return false; const pathname=new URL(request.url).pathname; return pathname.startsWith("/assets/")||pathname.includes(".")||pathname==="/robots.txt"; }
-function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json;charset=utf-8"}});}
+const requestHandler=createRequestHandler(()=>import("virtual:react-router/server-build"),import.meta.env.MODE);
+const OWNER_EMAIL="tramiteshbc@gmail.com",COOKIE="taiko_session",SESSION_DAYS=30;
+function shouldServeAsset(request:Request){const m=request.method.toUpperCase();if(m!=="GET"&&m!=="HEAD")return false;const p=new URL(request.url).pathname;return p.startsWith("/assets/")||p.includes(".")||p==="/robots.txt";}
+function json(data:unknown,status=200,headers:HeadersInit={}){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json;charset=utf-8","cache-control":"no-store",...headers}});}
+function cookieValue(request:Request,name:string){const raw=request.headers.get("cookie")||"";for(const part of raw.split(";")){const [k,...v]=part.trim().split("=");if(k===name)return decodeURIComponent(v.join("="));}return "";}
+async function sha256(value:string){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");}
+function sessionCookie(token:string,maxAge=SESSION_DAYS*86400){return `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;}
+function clearCookie(){return `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;}
+async function currentUser(request:Request,hub:DurableObjectStub<ItemStore>):Promise<User|null>{const token=cookieValue(request,COOKIE);if(!token)return null;return await hub.getUserBySession(await sha256(token));}
+async function newSession(hub:DurableObjectStub<ItemStore>,userId:number){const token=randomToken(32);const expires=new Date(Date.now()+SESSION_DAYS*86400000).toISOString();await hub.createSession(userId,await sha256(token),expires);return token;}
+function safeUser(user:User){return {id:user.id,email:user.email,name:user.name,role:user.role};}
+function authError(){return json({error:"authentication_required"},401);}
+function ownerError(){return json({error:"owner_required"},403);}
+function validPassword(p:string){return p.length>=12&&p.length<=128;}
 async function api(request:Request,env:Env):Promise<Response>{
-  const url=new URL(request.url), parts=url.pathname.replace(/^\/api\/?/,"").split("/").filter(Boolean), hub=env.ITEMS.get(env.ITEMS.idFromName("hub"));
-  if(parts[0]!=="files"&&parts[0]!=="shares"&&parts[0]!=="agent-jobs"&&parts[0]!=="policy") return json({error:"unknown endpoint"},404);
-  const body=async()=>await request.json().catch(()=>({})) as Record<string,unknown>; const id=Number(parts[1]);
-  if(parts[0]==="files"&&request.method==="GET") return json({files:await hub.listFiles(Number(url.searchParams.get("projectId")||0),url.searchParams.get("q")||"",url.searchParams.get("trash")==="1"?1:0)});
-  if(parts[0]==="files"&&parts[1]&&parts[2]==="rename"&&request.method==="POST"){const b=await body();await hub.renameFile(id,String(b.name||""));return json({ok:true});}
-  if(parts[0]==="files"&&parts[1]&&parts[2]==="trash"&&request.method==="POST"){await hub.trashFile(id);return json({ok:true});}
-  if(parts[0]==="files"&&parts[1]&&parts[2]==="restore"&&request.method==="POST"){await hub.restoreFile(id);return json({ok:true});}
-  if(parts[0]==="files"&&parts[1]&&parts[2]==="favorite"&&request.method==="POST"){const b=await body();await hub.favoriteFile(id,Boolean(b.favorite));return json({ok:true});}
-  if(parts[0]==="files"&&parts[1]&&parts[2]==="tags"&&request.method==="GET") return json({tags:await hub.listTags(id)});
-  if(parts[0]==="files"&&parts[1]&&parts[2]==="tags"&&request.method==="POST"){const b=await body();await hub.addTag(id,String(b.name||""));return json({ok:true});}
-  if(parts[0]==="shares"&&request.method==="GET") return json({shares:await hub.listShares(Number(url.searchParams.get("fileId"))||undefined)});
-  if(parts[0]==="shares"&&request.method==="POST"){const b=await body();return json({share:await hub.createShare(Number(b.fileId),randomToken(),b.expiresAt?String(b.expiresAt):null)},201);}
-  if(parts[0]==="shares"&&parts[1]&&parts[2]==="revoke"&&request.method==="POST"){await hub.revokeShare(id);return json({ok:true});}
-  if(parts[0]==="agent-jobs"&&request.method==="GET") return json({jobs:await hub.listAgentJobs(),execution:"disabled"});
-  if(parts[0]==="agent-jobs"&&request.method==="POST"){const b=await body();return json({job:await hub.enqueueAgentJob(b.projectId==null?null:Number(b.projectId),String(b.kind||"review"),String(b.policy||"manual-approval-required")),execution:"disabled"},201);}
-  if(parts[0]==="policy"&&request.method==="GET") return json({execution:"disabled",codeExecution:false,production:false,defaultPolicy:"manual-approval-required"});
-  return json({error:"method not allowed"},405);
+ const url=new URL(request.url),parts=url.pathname.replace(/^\/api\/?/,"").split("/").filter(Boolean),hub=env.ITEMS.get(env.ITEMS.idFromName("hub"));
+ const body=async()=>await request.json().catch(()=>({})) as Record<string,unknown>;
+ if(parts[0]==="auth"){
+  if(parts[1]==="owner-register"&&request.method==="POST"){const b=await body(),email=String(b.email||"").trim().toLowerCase(),name=String(b.name||"").trim(),password=String(b.password||"");if(email!==OWNER_EMAIL)return json({error:"owner_email_not_allowed"},403);if(!name||!validPassword(password))return json({error:"invalid_registration_data"},400);try{const hash=await bcrypt.hash(password,12),user=await hub.registerOwner(email,name,hash),token=await newSession(hub,user.id);return json({user:safeUser(user)},201,{"set-cookie":sessionCookie(token)});}catch(e){return json({error:e instanceof Error?e.message:"registration_failed"},409);}}
+  if(parts[1]==="invite-register"&&request.method==="POST"){const b=await body(),inviteToken=String(b.inviteToken||""),email=String(b.email||"").trim().toLowerCase(),name=String(b.name||"").trim(),password=String(b.password||"");if(!inviteToken||!email||!name||!validPassword(password))return json({error:"invalid_registration_data"},400);try{const hash=await bcrypt.hash(password,12),user=await hub.registerInvitedUser(inviteToken,email,name,hash),token=await newSession(hub,user.id);return json({user:safeUser(user)},201,{"set-cookie":sessionCookie(token)});}catch(e){return json({error:e instanceof Error?e.message:"registration_failed"},409);}}
+  if(parts[1]==="login"&&request.method==="POST"){const b=await body(),email=String(b.email||"").trim().toLowerCase(),password=String(b.password||"");const account=await hub.getUserByEmail(email);if(!account||!(await bcrypt.compare(password,account.passwordHash)))return json({error:"invalid_credentials"},401);const token=await newSession(hub,account.id);return json({user:safeUser(account)},200,{"set-cookie":sessionCookie(token)});}
+  if(parts[1]==="logout"&&request.method==="POST"){const token=cookieValue(request,COOKIE);if(token)await hub.deleteSession(await sha256(token));return json({ok:true},200,{"set-cookie":clearCookie()});}
+  if(parts[1]==="me"&&request.method==="GET"){const user=await currentUser(request,hub);return user?json({user:safeUser(user),memberships:await hub.listMemberships(user.id)}):authError();}
+  return json({error:"unknown_auth_endpoint"},404);
+ }
+ const user=await currentUser(request,hub);if(!user)return authError();
+ if(parts[0]==="projects"&&request.method==="GET")return json({projects:await hub.listProjectsForUser(user)});
+ if(parts[0]==="invites"){if(user.role!=="OWNER")return ownerError();if(request.method==="GET")return json({invites:await hub.listInvites()});if(request.method==="POST"){const b=await body(),projectId=Number(b.projectId),label=String(b.label||"Colaborador");if(!Number.isInteger(projectId))return json({error:"invalid_project"},400);return json({invite:await hub.createInvite(projectId,label,randomToken())},201);}}
+ if(parts[0]==="files"&&request.method==="GET"){const projectId=Number(url.searchParams.get("projectId")||0);if(!Number.isInteger(projectId)||!(await hub.canAccessProject(user,projectId)))return json({error:"project_access_denied"},403);return json({files:await hub.listFiles(projectId,url.searchParams.get("q")||"",url.searchParams.get("trash")==="1"?1:0)});}
+ if(parts[0]==="files"||parts[0]==="shares"||parts[0]==="agent-jobs"){if(user.role!=="OWNER")return ownerError();const b=body,id=Number(parts[1]);if(parts[0]==="files"&&parts[1]&&parts[2]==="rename"&&request.method==="POST"){const x=await b();await hub.renameFile(id,String(x.name||""));return json({ok:true});}if(parts[0]==="files"&&parts[1]&&parts[2]==="trash"&&request.method==="POST"){await hub.trashFile(id);return json({ok:true});}if(parts[0]==="files"&&parts[1]&&parts[2]==="restore"&&request.method==="POST"){await hub.restoreFile(id);return json({ok:true});}if(parts[0]==="files"&&parts[1]&&parts[2]==="favorite"&&request.method==="POST"){const x=await b();await hub.favoriteFile(id,Boolean(x.favorite));return json({ok:true});}if(parts[0]==="files"&&parts[1]&&parts[2]==="tags"&&request.method==="GET")return json({tags:await hub.listTags(id)});if(parts[0]==="files"&&parts[1]&&parts[2]==="tags"&&request.method==="POST"){const x=await b();await hub.addTag(id,String(x.name||""));return json({ok:true});}if(parts[0]==="shares"&&request.method==="GET")return json({shares:await hub.listShares(Number(url.searchParams.get("fileId"))||undefined)});if(parts[0]==="shares"&&request.method==="POST"){const x=await b();return json({share:await hub.createShare(Number(x.fileId),randomToken(),x.expiresAt?String(x.expiresAt):null)},201);}if(parts[0]==="shares"&&parts[1]&&parts[2]==="revoke"&&request.method==="POST"){await hub.revokeShare(id);return json({ok:true});}if(parts[0]==="agent-jobs"&&request.method==="GET")return json({jobs:await hub.listAgentJobs(),execution:"disabled"});if(parts[0]==="agent-jobs"&&request.method==="POST"){const x=await b();return json({job:await hub.enqueueAgentJob(x.projectId==null?null:Number(x.projectId),String(x.kind||"review"),String(x.policy||"manual-approval-required")),execution:"disabled"},201);}}
+ if(parts[0]==="policy"&&request.method==="GET")return json({execution:"disabled",codeExecution:false,production:false,defaultPolicy:"manual-approval-required"});
+ return json({error:"unknown_endpoint"},404);
 }
-export default { async fetch(request:Request,env:Env,ctx:ExecutionContext){
-  if(new URL(request.url).pathname.startsWith("/api/")) return api(request,env);
-  if(env.ASSETS&&shouldServeAsset(request)){const response=await env.ASSETS.fetch(request);if(response.status!==404)return response;}
-  return requestHandler(request,{cloudflare:{env,ctx}});
-} } satisfies ExportedHandler<Env>;
+export default {async fetch(request:Request,env:Env,ctx:ExecutionContext){if(new URL(request.url).pathname.startsWith("/api/"))return api(request,env);if(env.ASSETS&&shouldServeAsset(request)){const response=await env.ASSETS.fetch(request);if(response.status!==404)return response;}return requestHandler(request,{cloudflare:{env,ctx}});}} satisfies ExportedHandler<Env>;
