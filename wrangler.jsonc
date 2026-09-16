@@ -1,13 +1,12 @@
 {
   "name": "taiko-private-hub",
-  "main": "./build/server/worker.js",
-  "no_bundle": true,
+  "main": "./workers/app.ts",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": [
     "nodejs_compat"
   ],
   "assets": {
-    "directory": "./build/client",
+    "directory": "./public/",
     "binding": "ASSETS"
   },
   "durable_objects": {
