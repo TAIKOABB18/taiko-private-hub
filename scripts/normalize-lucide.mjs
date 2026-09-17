@@ -1,7 +1,8 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../app/", import.meta.url);
+const root = fileURLToPath(new URL("../app/", import.meta.url));
 
 function pascal(slug) {
   return slug.split("-").map((part) => part ? part[0].toUpperCase() + part.slice(1) : "").join("");
