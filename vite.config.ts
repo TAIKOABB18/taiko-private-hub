@@ -4,4 +4,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [tailwindcss(), reactRouter()],
+  ssr: {
+    noExternal: ["lucide-react"],
+  },
 });
