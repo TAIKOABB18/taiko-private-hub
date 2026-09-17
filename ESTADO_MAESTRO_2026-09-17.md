@@ -36,6 +36,15 @@ Regla: no reiniciar el proyecto desde cero. No mezclar arquitecturas. No tocar s
 - `bun run build` validado.
 - Vercel creó Preview del PR y notificó estado Ready.
 
+## CLOUDFLARE BUILDS — 2026-09-17
+
+- Se auditó el fallo de Cloudflare del commit `d1a6c969983a96be7650547acc8ee12b174e2069`.
+- Causa confirmada por el registro de Cloudflare: el build token anterior pertenecía a un usuario que había salido de la organización y quedó inválido.
+- El usuario creó y seleccionó en Worker > Settings > Builds un nuevo token de compilación: `Workers Builds - 2026-09-17 02:41`.
+- Los reintentos del build histórico siguieron fallando porque conservaban la credencial asociada al build original.
+- Este commit documental genera un evento push nuevo en la rama de reparación para que Cloudflare cree una compilación nueva usando la configuración actual.
+- No se modifica código funcional, arquitectura, `main`, variables de aplicación ni secretos.
+
 ## ESTADO DE GIT
 
 `main` NO contiene todavía esta reparación.
