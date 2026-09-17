@@ -2,13 +2,11 @@
   "name": "taiko-private-hub",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": "24.x"
-  },
+  "engines": { "node": "24.x" },
   "scripts": {
     "dev": "react-router dev",
-    "build": "react-router typegen && tsc --noEmit && react-router build",
-    "build:cloudflare": "react-router typegen && tsc --noEmit && react-router build && node ./scripts/build-manifest.mjs",
+    "build": "node ./scripts/normalize-lucide.mjs && react-router typegen && tsc --noEmit && react-router build",
+    "build:cloudflare": "node ./scripts/normalize-lucide.mjs && react-router typegen && tsc --noEmit && react-router build && node ./scripts/build-manifest.mjs",
     "deploy": "wrangler deploy --config build/server/wrangler.json",
     "typecheck": "react-router typegen && tsc --noEmit"
   },
