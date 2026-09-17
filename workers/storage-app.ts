@@ -27,9 +27,13 @@ function cookieValue(request: Request, name: string) {
   return "";
 }
 
+function bufferSource(bytes: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(bytes).buffer;
+}
+
 async function sha256Bytes(value: string | Uint8Array) {
   const bytes = typeof value === "string" ? encoder.encode(value) : value;
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", bufferSource(bytes)));
 }
 
 async function sha256Hex(value: string | Uint8Array) {
@@ -37,7 +41,7 @@ async function sha256Hex(value: string | Uint8Array) {
 }
 
 async function hmac(key: Uint8Array, value: string) {
-  const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const cryptoKey = await crypto.subtle.importKey("raw", bufferSource(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(value)));
 }
 
@@ -74,7 +78,8 @@ async function signedS3Fetch(env: Env, method: string, key: string, body?: Uint8
   const signature = Array.from(await hmac(kSigning, stringToSign), (b) => b.toString(16).padStart(2, "0")).join("");
   const requestHeaders = new Headers(headers);
   requestHeaders.set("authorization", `AWS4-HMAC-SHA256 Credential=${accessKey}/${scope}, SignedHeaders=${signedNames.join(";")}, Signature=${signature}`);
-  return fetch(target, { method, headers: requestHeaders, body: body && method !== "GET" && method !== "HEAD" ? body : undefined });
+  const requestBody = body && method !== "GET" && method !== "HEAD" ? bufferSource(body) : undefined;
+  return fetch(target, { method, headers: requestHeaders, body: requestBody });
 }
 
 async function currentUser(request: Request, env: Env) {
