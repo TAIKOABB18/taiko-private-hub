@@ -2,7 +2,7 @@ name: Deploy Cloudflare Worker
 
 on:
   push:
-    branches: [main]
+    branches: [main, repair-repo-only-20260916]
   workflow_dispatch:
 
 concurrency:
