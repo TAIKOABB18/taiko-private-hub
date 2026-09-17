@@ -1,6 +1,6 @@
 {
   "name": "taiko-private-hub",
-  "main": "./workers/app.ts",
+  "main": "./workers/storage-app.ts",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": [
     "nodejs_compat"
