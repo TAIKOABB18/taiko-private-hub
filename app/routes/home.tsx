@@ -219,18 +219,18 @@ export default function Home() {
   if (loading) return <main className="grid min-h-svh place-items-center bg-[#061321] text-slate-300">Comprobando sesión…</main>;
 
   return (
-    <main className="min-h-svh bg-[#061321] text-white">
+    <main className="taiko-owner min-h-svh bg-[#061321] text-white">
       <div className="flex min-h-svh">
         <Sidebar active={active} setActive={setActive} />
         <section className="min-w-0 flex-1">
-          <header className="flex h-16 items-center gap-4 border-b border-slate-800 px-5 lg:px-8">
+          <header className="flex min-h-16 min-w-0 items-center gap-2 border-b border-slate-800 px-3 sm:gap-4 sm:px-5 lg:px-8">
             <div className="lg:hidden"><Logo /></div>
-            <div className="relative max-w-md flex-1"><Search className="absolute left-3 top-2.5 size-4 text-slate-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar en proyectos..." className="h-9 border-slate-800 bg-[#0b1b2b] pl-9 text-xs text-white" /></div>
+            <div className="relative min-w-0 max-w-md flex-1"><Search className="absolute left-3 top-2.5 size-4 text-slate-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar en proyectos..." className="h-9 border-slate-800 bg-[#0b1b2b] pl-9 text-xs text-white" /></div>
             <Bell className="size-4 text-slate-400" />
-            <button onClick={() => void logout()} className="flex items-center gap-2 text-xs text-slate-300"><span className="grid size-8 place-items-center rounded-full bg-blue-600">O</span><span className="hidden md:block">{user?.name || "Owner"}<br /><small className="text-[9px] text-slate-500">OWNER</small></span><ChevronDown className="size-3" /></button>
+            <button onClick={() => void logout()} className="flex min-w-0 max-w-[45%] items-center gap-2 text-xs text-slate-300"><span className="grid size-8 place-items-center rounded-full bg-blue-600">O</span><span className="hidden min-w-0 truncate md:block">{user?.name || "Owner"}<br /><small className="text-[9px] text-slate-500">OWNER</small></span><ChevronDown className="size-3" /></button>
           </header>
 
-          <div className="mx-auto max-w-[1500px] p-5 lg:p-8">
+          <div className="mx-auto min-w-0 max-w-[1500px] p-3 sm:p-5 lg:p-8">
             {error && <p role="alert" className="mb-4 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">{error}</p>}
             {notice && <p className="mb-4 rounded-lg border border-blue-900 bg-blue-950/50 p-3 text-sm text-blue-100">{notice}</p>}
 
