@@ -89,3 +89,39 @@
     @apply bg-primary text-primary-foreground;
   }
 }
+
+/* Owner dashboard uses a dark surface regardless of the global light theme. */
+.taiko-owner {
+  --foreground: oklch(0.985 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted-foreground: oklch(0.78 0.015 260);
+  color-scheme: dark;
+}
+.taiko-owner input,
+.taiko-owner select,
+.taiko-owner textarea {
+  color: #f8fafc;
+}
+.taiko-owner input::placeholder,
+.taiko-owner textarea::placeholder {
+  color: #94a3b8;
+}
+.taiko-owner button {
+  min-width: 0;
+}
+.taiko-owner section,
+.taiko-owner article {
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .taiko-owner {
+    overflow-x: clip;
+  }
+  .taiko-owner h1,
+  .taiko-owner h2 {
+    overflow-wrap: anywhere;
+  }
+}
